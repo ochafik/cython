@@ -2928,10 +2928,26 @@ class ExpandInplaceOperators(EnvTransform):
         lhs = lhs.analyse_target_types(env)
         dup.analyse_types(env)  # FIXME: no need to reanalyse the copy, right?
         binop.analyse_operation(env)
+
+        rhs = rhs.analyse_target_types(env)
+
+        def is_c_int(x: ExprNodes.ExprNode):
+          return (x.type == PyrexTypes.c_int_type) or (x.result_type == 'int')
+
+        if node.operator in ('+', '-', '*', '/'):
+          if is_c_int(lhs) and is_c_int(rhs):
+              return Nodes.InPlaceAssignmentNode( \
+                  lhs.pos,
+                  operator=node.operator,
+                  lhs=side_effect_free_reference(lhs, setting=True),
+                  rhs=side_effect_free_reference(rhs, setting=True))
+
+        rhs=binop.coerce_to(lhs.type, env)
+
         node = Nodes.SingleAssignmentNode(
             node.pos,
             lhs = lhs,
-            rhs=binop.coerce_to(lhs.type, env))
+            rhs=rhs)
         # Use LetRefNode to avoid side effects.
         let_ref_nodes.reverse()
         for t in let_ref_nodes:
